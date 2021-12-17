@@ -2,7 +2,7 @@ use structopt::StructOpt;
 
 use warp::Filter;
 use warp_reverse_proxy::extract_request_data_filter;
-use log::info;
+use log::{info, error};
 
 mod datacache;
 use datacache::{DataCache, CacheConfig};
@@ -24,15 +24,17 @@ struct Config {
 
 impl Config {
     fn new(name: &str) -> Self {
+        let args = Cli::from_args();
+
         let mut settings = config::Config::default();
         settings
             // add in `./<name>.toml`
-            .merge(config::File::with_name(name)).unwrap()
+            .merge(config::File::with_name(name)).unwrap_or_else(
+                | e | { error!("Error reading config file: {}", e); std::process::exit(-1) }
+            )
             // Add in settings from the environment (with a prefix of APP)
             // Eg.. `CACHE_DEBUG=1 ./target/app` would set the `debug` key
             .merge(config::Environment::with_prefix("CACHE")).unwrap();
-
-        let args = Cli::from_args();
 
         Config { settings, args }
     }
@@ -77,7 +79,7 @@ async fn main() {
     info!("starting Forsight BI Server caching proxy");
 
     // setup settings
-    let config = Config::new("settings");
+    let config = Config::new("settings.toml");
 
     let cache = DataCache::new(&config);
     let proxy = Box::new(CacheProxy::new(cache, &config));
