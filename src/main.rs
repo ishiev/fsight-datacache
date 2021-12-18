@@ -82,14 +82,13 @@ async fn main() {
     let config = Config::new("settings.toml");
 
     let cache = DataCache::new(&config);
-    let proxy = Box::new(CacheProxy::new(cache, &config));
+    let proxy = std::sync::Arc::new(CacheProxy::new(cache, &config));
     let request_filter = extract_request_data_filter();
 
-    //let proxy_map = { move || CacheProxy::new(DataCache::new(&config), &config) };
-    let app = warp::get()
+    let app = warp::any()
         .map(move || { proxy.clone() } )
         .and(request_filter)
-        .and_then(CacheProxy::handler);
+        .and_then(CacheProxy::handle_request);
 
     warp::serve(app).run(([0, 0, 0, 0], config.get_port())).await;
 }

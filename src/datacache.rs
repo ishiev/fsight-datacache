@@ -54,13 +54,19 @@ impl DataCache {
         }
     }
 
-    pub fn insert(&self, hash: &str, body: &Bytes) -> Result<(), Box<dyn Error>> {
+    pub async fn insert(&self, hash: &str, body: &Bytes) -> Result<usize, Box<dyn Error>> {
         let entry = CacheEntry {
             body: body.to_vec(),
             ctime: Utc::now()
         };
         match self.db.insert(hash, bincode::serialize(&entry)?) {
-            Ok(_) => Ok(()),
+            Ok(_) => {
+                // flushes saved data to disk
+                match self.db.flush_async().await {
+                    Ok(bytes) => Ok(bytes),
+                    Err(err) => Err(Box::new(err))
+                }
+            }
             Err(err) => Err(Box::new(err))
         } 
     }
