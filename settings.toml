@@ -5,4 +5,4 @@ base_path = "/"
 
 [cache]
 db_path = "data"
-ttl = 3600
+ttl = 20

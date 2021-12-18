@@ -1,7 +1,7 @@
 use std::error::Error;
 
 use chrono::{DateTime, Utc};
-use log::{info};
+use log::{info, debug};
 use serde::{Deserialize, Serialize};
 
 use warp::{
@@ -9,15 +9,14 @@ use warp::{
     filters::path::FullPath
 };
 
-#[derive(Clone)]
 pub struct DataCache {
     db: sled::Db, // Cache database
-    ttl: u32,     // Data Time-To-Live in seconds
+    ttl: i64,     // Data Time-To-Live in seconds
 }
 
 pub trait CacheConfig {
     fn get_db_path(&self) -> String;
-    fn get_ttl(&self) -> u32 {
+    fn get_ttl(&self) -> i64 {
         3600
     }
 }
@@ -39,8 +38,7 @@ impl DataCache {
         }
     }
 
-    pub fn get(&self, hash: &str) -> Result<Option<Bytes>, Box<dyn Error + Send>> {
-        // TODO Process error to satisfy Send trait!
+    pub fn get(&self, hash: &str) -> Result<Option<Bytes>, Box<dyn Error>> {
         if let Some(data) = self.db.get(&hash).unwrap() {
             let entry: CacheEntry = bincode::deserialize(&data).unwrap();
             info!(
@@ -48,8 +46,26 @@ impl DataCache {
                 &hash[..6],
                 entry.ctime
             );
-            Ok(Some(Bytes::from(entry.body)))
+            // test entry ttl
+            let ttl = (Utc::now() - entry.ctime).num_seconds();
+            debug!(
+                "[{}] result ttl={}, config ttl={}",
+                &hash[..6],
+                ttl, self.ttl
+            );
+            if ttl > self.ttl {
+                // entry too old
+                info!(
+                    "[{}] sorry, result too old, ttl={}, skipping",
+                    &hash[..6],
+                    ttl
+                );
+                Ok(None)
+            } else {
+                Ok(Some(Bytes::from(entry.body)))
+            }
         } else {
+            // not found
             Ok(None)
         }
     }

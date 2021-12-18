@@ -46,10 +46,12 @@ impl CacheConfig for Config {
     fn get_db_path(&self) -> String {
         self.settings
             .get_str("cache.db_path")
-            .unwrap_or_else(|_|String::from("data"))
+            .unwrap_or_else(|_| String::from("data"))
     }
-    fn get_ttl(&self) -> u32 {
-        3600
+    fn get_ttl(&self) -> i64 {
+        self.settings
+            .get_int("cache.ttl")
+            .unwrap_or_else(|_| 3600)
     }
 }
 

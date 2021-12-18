@@ -23,7 +23,6 @@ pub trait ProxyConfig {
     fn get_base_path(&self) -> String { String::default() }
 }
 
-#[derive(Clone)]
 pub struct CacheProxy {
     cache: DataCache,
     proxy_address: String,
