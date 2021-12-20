@@ -51,7 +51,7 @@ impl CacheProxy {
         // calculate hash for request 
         let hash = rq_hash_string(&uri, &body);
         info!(
-            "[{}] request hash",
+            "[{}] receive new request",
             &hash[..6]
         );
 
