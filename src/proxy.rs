@@ -55,8 +55,7 @@ impl CacheProxy {
             &hash[..6]
         );
 
-        if method == Method::GET {
-            // only GET method allowed
+        if method == Method::GET || method == Method::POST {
             if let Ok(Some(bytes)) = self.cache.get(&hash) {
                 info!(
                     "[{}] return cached response",
