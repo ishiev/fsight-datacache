@@ -22,6 +22,7 @@ pub trait ProxyConfig {
     fn get_proxy_address(&self) -> String;
     fn get_host(&self) -> String { String::default() }
     fn get_base_path(&self) -> String { String::default() }
+    fn get_rq_save_path(&self) -> Option<String> { None }
 }
 
 pub struct CacheProxy {
@@ -39,7 +40,7 @@ impl CacheProxy {
             proxy_address: config.get_proxy_address(),
             host: config.get_host(),
             base_path: config.get_base_path(),
-            rq_save_path: Some("requests".to_owned())
+            rq_save_path: config.get_rq_save_path()
         }
     }
 

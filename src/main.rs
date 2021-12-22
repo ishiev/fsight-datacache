@@ -71,6 +71,11 @@ impl ProxyConfig for Config {
             .get_str("proxy.base_path")
             .unwrap_or_default()
     }
+    fn get_rq_save_path(&self) -> Option<String> {
+        self.settings
+            .get_str("debug.rq_save_path")
+            .ok()
+    }
 }
 
 
