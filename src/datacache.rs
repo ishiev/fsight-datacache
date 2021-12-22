@@ -1,7 +1,7 @@
 use std::error::Error;
 
 use chrono::{DateTime, Utc};
-use log::{info, debug};
+use log::{info};
 use serde::{Deserialize, Serialize};
 
 use warp::{
@@ -30,8 +30,17 @@ struct CacheEntry {
 
 impl DataCache {
     pub fn new<T: CacheConfig>(config: &T) -> Self {
-        let db: sled::Db = sled::open(config.get_db_path())
-            .expect(format!("error opening cache datadase: {}", config.get_db_path()).as_str());
+        // sled db configuration
+        let db_config = sled::Config::default()
+            .path(config.get_db_path())
+            .cache_capacity(10_000_000_000)
+            .mode(sled::Mode::HighThroughput)
+            .use_compression(true)
+            .flush_every_ms(Some(1000));
+
+        let db: sled::Db = db_config.open()
+            .expect(format!("error opening cache database: {}", config.get_db_path()).as_str());
+
         DataCache {
             db: db,
             ttl: config.get_ttl(),
@@ -41,28 +50,35 @@ impl DataCache {
     pub fn get(&self, hash: &str) -> Result<Option<Bytes>, Box<dyn Error>> {
         if let Some(data) = self.db.get(&hash).unwrap() {
             let entry: CacheEntry = bincode::deserialize(&data).unwrap();
-            info!(
-                "[{}] found result in cache database, stored at {}",
-                &hash[..6],
-                entry.ctime
-            );
             // test entry ttl
-            let ttl = (Utc::now() - entry.ctime).num_seconds();
-            debug!(
-                "[{}] result ttl={}, config ttl={}",
+            let age = (Utc::now() - entry.ctime).num_seconds();
+            info!(
+                "[{}] found result in cache database, age={}",
                 &hash[..6],
-                ttl, self.ttl
+                age
             );
-            if ttl > self.ttl {
+            if age > self.ttl {
                 // entry too old
                 info!(
-                    "[{}] sorry, result too old, ttl={}, skipping",
+                    "[{}] sorry, result too old, config ttl={}, skipping...",
                     &hash[..6],
-                    ttl
+                    self.ttl
                 );
                 Ok(None)
             } else {
-                Ok(Some(Bytes::from(entry.body)))
+                // check size of body
+                // if empty - return not found
+                let size = entry.body.len();
+                if size > 0 {
+                    Ok(Some(Bytes::from(entry.body)))
+                } else {
+                    info!(
+                        "[{}] sorry, result size={}, skipping...",
+                        &hash[..6],
+                        size
+                    );
+                    Ok(None)
+                }
             }
         } else {
             // not found
@@ -70,19 +86,13 @@ impl DataCache {
         }
     }
 
-    pub async fn insert(&self, hash: &str, body: &Bytes) -> Result<usize, Box<dyn Error>> {
+    pub fn insert(&self, hash: &str, body: &Bytes) -> Result<(), Box<dyn Error>> {
         let entry = CacheEntry {
             body: body.to_vec(),
             ctime: Utc::now()
         };
         match self.db.insert(hash, bincode::serialize(&entry)?) {
-            Ok(_) => {
-                // flushes saved data to disk
-                match self.db.flush_async().await {
-                    Ok(bytes) => Ok(bytes),
-                    Err(err) => Err(Box::new(err))
-                }
-            }
+            Ok(_) => Ok(()),
             Err(err) => Err(Box::new(err))
         } 
     }

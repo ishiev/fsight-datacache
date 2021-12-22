@@ -79,7 +79,7 @@ impl CacheProxy {
         ).await {
             Ok(res) => {
                 // save body to cache
-                if let Err(e) = self.cache.insert(&hash, res.body()).await {
+                if let Err(e) = self.cache.insert(&hash, res.body()) {
                     error!(
                         "[{}] error saving response to datacashe, {}",
                         &hash[..6], e
