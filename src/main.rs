@@ -77,6 +77,14 @@ impl ProxyConfig for Config {
             .get_str("debug.rq_save_path")
             .ok()
     }
+    fn get_filter_include(&self) -> Vec<Option<String>> {
+        self.settings
+            .get_array("filter.include")
+            .unwrap_or_default()
+            .into_iter()
+            .map(|x| { config::Value::into_str(x).ok() })
+            .collect()
+    }
 }
 
 

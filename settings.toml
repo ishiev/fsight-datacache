@@ -7,5 +7,11 @@ base_path = "/"
 db_path = "data"
 ttl = 3600
 
+[filter]
+include = [
+    "{\"BatchExec\"",
+    "<!DOCTYPE HT"
+]
+
 [debug]
-rq_save_path = "requests"
+#rq_save_path = "requests"

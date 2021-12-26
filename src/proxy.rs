@@ -25,6 +25,7 @@ pub trait ProxyConfig {
     fn get_host(&self) -> String { String::default() }
     fn get_base_path(&self) -> String { String::default() }
     fn get_rq_save_path(&self) -> Option<String> { None }
+    fn get_filter_include(&self) -> Vec<Option<String>> { vec!() }
 }
 
 pub struct CacheProxy {
@@ -32,7 +33,8 @@ pub struct CacheProxy {
     proxy_address: String,
     host: String,
     base_path: String,
-    rq_save_path: Option<String>
+    rq_save_path: Option<String>,
+    filter_include: Vec<Option<String>>
 }
 
 impl CacheProxy {
@@ -42,8 +44,34 @@ impl CacheProxy {
             proxy_address: config.get_proxy_address(),
             host: config.get_host(),
             base_path: config.get_base_path(),
-            rq_save_path: config.get_rq_save_path()
+            rq_save_path: config.get_rq_save_path(),
+            filter_include: config.get_filter_include()
         }
+    }
+
+    /// Apply body filter for first 12 bytes, if defined
+    fn filter_body(&self, body: &Bytes) -> bool {
+        // active only if filters count > 0
+        if self.filter_include.len() > 0 {
+            const MAGIC_LEN: usize = 12;
+            // check for body len, prevent panics
+            if body.len() < MAGIC_LEN {
+                return false;
+            }
+            // read first MAGIC_LEN bytes
+            let magic = &body[..MAGIC_LEN];
+            let count = self.filter_include
+                .iter()
+                .filter(|f| {
+                    if let Some(pattern) = f {
+                        return pattern.as_bytes() == magic;
+                    }
+                    true
+                })
+                .count();
+            return count > 0;
+        }   
+        true
     }
 
     /// Save body to file if rq_save_path is set (debug mode)
@@ -115,6 +143,15 @@ impl CacheProxy {
             Ok(res) => {
                 // save body to cache only if OK 200
                 if res.status() == StatusCode::OK {
+                    // test body against filter
+                    if !self.filter_body(&res.body()) {
+                        info!(
+                            "[{}] response blocked by filter, not saved to cache",
+                            &hash[..6]
+                        );
+                        return Ok(res);
+                    }
+
                     let timer = Instant::now();
                     if let Err(e) = self.cache.insert(&hash, &res) {
                         error!(
