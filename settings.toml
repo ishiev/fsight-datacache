@@ -5,7 +5,7 @@ base_path = "/"
 
 [cache]
 db_path = "data"
-ttl = 600
+ttl = 3600
 
 [debug]
 rq_save_path = "requests"

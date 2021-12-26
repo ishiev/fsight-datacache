@@ -9,6 +9,7 @@ use datacache::{DataCache, CacheConfig};
 
 mod proxy;
 use proxy::{CacheProxy, ProxyConfig};
+use std::sync::Arc;
 
 
 #[derive(StructOpt, Debug)]
@@ -89,11 +90,11 @@ async fn main() {
     let config = Config::new("settings.toml");
 
     let cache = DataCache::new(&config);
-    let proxy = std::sync::Arc::new(CacheProxy::new(cache, &config));
+    let proxy = Arc::new(CacheProxy::new(cache, &config));
     let request_filter = extract_request_data_filter();
 
     let app = warp::any()
-        .map(move || { proxy.clone() } )
+        .map(move || { Arc::clone(&proxy) })
         .and(request_filter)
         .and_then(CacheProxy::handle_request);
 

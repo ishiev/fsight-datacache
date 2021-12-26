@@ -1,5 +1,6 @@
 use warp::{
     http::Response,
+    http::StatusCode,
     Rejection, 
     hyper::body::Bytes,
     hyper::HeaderMap,
@@ -13,6 +14,7 @@ use warp_reverse_proxy::{
 };
 
 use log::{info, error};
+use std::time::Instant;
 use tokio::io::AsyncWriteExt; // for write_all()
 
 use crate::datacache::{DataCache, rq_hash_string};
@@ -88,22 +90,22 @@ impl CacheProxy {
 
         // find saved response body in cache database
         if method == Method::GET || method == Method::POST {
-            if let Ok(Some(bytes)) = self.cache.get(&hash) {
+            if let Ok(Some(response)) = self.cache.get(&hash) {
                 info!(
                     "[{}] return cached response",
                     &hash[..6]
                 );
-                return Ok(Response::new(bytes))
+                return Ok(response)
             } 
         }
 
         // continue processing with request to destination service
         // insert host header from config
-        headers.insert("host", self.host.parse().unwrap());
+        headers.insert("Host", self.host.parse().unwrap());
         // proxy to destination and return response
         match proxy_to_and_forward_response(
-            self.proxy_address.clone(),
-            self.base_path.clone(),
+            self.proxy_address.to_owned(),
+            self.base_path.to_owned(),
             uri,
             params,
             method,
@@ -111,16 +113,27 @@ impl CacheProxy {
             body
         ).await {
             Ok(res) => {
-                // save body to cache
-                if let Err(e) = self.cache.insert(&hash, res.body()) {
-                    error!(
-                        "[{}] error saving response to datacashe, {}",
-                        &hash[..6], e
-                    )
+                // save body to cache only if OK 200
+                if res.status() == StatusCode::OK {
+                    let timer = Instant::now();
+                    if let Err(e) = self.cache.insert(&hash, &res) {
+                        error!(
+                            "[{}] error saving response to cache, {}",
+                            &hash[..6], e
+                        )
+                    } else {
+                        info!(
+                            "[{}] new response saved to cache, elapsed={} ms",
+                            &hash[..6], timer.elapsed().as_millis()
+                        )
+                    }
                 } else {
-                    info!("[{}] new response saved to cache",
-                    &hash[..6],)
+                    info!(
+                        "[{}] response status code={}, not saved to cache",
+                        &hash[..6], res.status()
+                    )
                 }
+                // return response
                 Ok(res)
             }
             Err(err) => Err(err)
